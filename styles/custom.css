@@ -1,0 +1,290 @@
+/* =====================================================================
+   ASTRA-IC: CLEAN MODERN LIGHT THEME & 2-STAGE WORKFLOW
+   Palette: Pure White (#FFFFFF), Soft Slate (#F8FAFC), Crisp Border (#E2E8F0)
+   Typography: Deep Charcoal (#0F172A), Cool Slate (#475569)
+   Accents: Tech Blue (#2563EB), Alert Red (#DC2626), Pass Green (#16A34A)
+   ===================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+    --bg-page: #F8FAFC;
+    --bg-card: #FFFFFF;
+    --border-card: #E2E8F0;
+    --border-subtle: #F1F5F9;
+    --text-primary: #0F172A;
+    --text-secondary: #475569;
+    --text-muted: #94A3B8;
+    --accent-blue: #2563EB;
+    --accent-blue-light: #EFF6FF;
+    --accent-green: #16A34A;
+    --accent-green-light: #DCFCE7;
+    --accent-red: #DC2626;
+    --accent-red-light: #FEE2E2;
+    --accent-amber: #D97706;
+    --accent-amber-light: #FEF3C7;
+}
+
+/* Base Body & App Shell */
+.stApp {
+    background-color: var(--bg-page) !important;
+    background-image: none !important;
+    color: var(--text-primary) !important;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+/* Hide Streamlit default header decoration */
+header[data-testid="stHeader"] {
+    background-color: transparent !important;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-primary) !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em;
+}
+
+p, span, label {
+    color: var(--text-secondary);
+}
+
+.telemetry-font {
+    font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* Stage 1: Centered Landing & Ingestion Screen */
+.landing-container {
+    max-width: 680px;
+    margin: 40px auto;
+    padding: 36px 32px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    text-align: center;
+}
+
+.landing-title {
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    letter-spacing: -0.025em;
+}
+
+.landing-subtext {
+    font-size: 0.96rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 24px;
+}
+
+/* Standards Badge Strip */
+.standard-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.badge-blue {
+    background: var(--accent-blue-light);
+    color: var(--accent-blue);
+    border: 1px solid #DBEAFE;
+}
+
+.badge-green {
+    background: var(--accent-green-light);
+    color: var(--accent-green);
+    border: 1px solid #BBF7D0;
+}
+
+.badge-red {
+    background: var(--accent-red-light);
+    color: var(--accent-red);
+    border: 1px solid #FECACA;
+}
+
+.badge-amber {
+    background: var(--accent-amber-light);
+    color: var(--accent-amber);
+    border: 1px solid #FDE68A;
+}
+
+/* Stage 2: Top Navigation Bar */
+.dashboard-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: 12px;
+    padding: 14px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.topbar-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Section 1: Crisp KPI Metric Cards */
+.kpi-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: 12px;
+    padding: 18px 18px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.kpi-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+}
+
+.kpi-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.1;
+    margin-bottom: 8px;
+}
+
+.kpi-subtext {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Section Containers & Cards */
+.clean-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    margin-bottom: 20px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+}
+
+.section-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* Section 3: Status Banners */
+.status-banner-alert {
+    background: var(--accent-red-light);
+    border: 1px solid #FECACA;
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+}
+
+.status-banner-nominal {
+    background: var(--accent-green-light);
+    border: 1px solid #BBF7D0;
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+}
+
+.explanation-box {
+    background: #F8FAFC;
+    border: 1px solid var(--border-card);
+    border-left: 4px solid var(--accent-blue);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-top: 12px;
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+/* Streamlit Button Overrides */
+.stButton>button {
+    background: #2563EB !important;
+    color: #FFFFFF !important;
+    border: 1px solid #1D4ED8 !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    font-size: 0.88rem !important;
+    padding: 8px 18px !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+    transition: all 0.15s ease !important;
+}
+
+.stButton>button:hover {
+    background: #1D4ED8 !important;
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.2) !important;
+    transform: translateY(-1px) !important;
+}
+
+.secondary-btn>button {
+    background: #FFFFFF !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-card) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.secondary-btn>button:hover {
+    background: #F1F5F9 !important;
+    border-color: #CBD5E1 !important;
+    color: #0F172A !important;
+}
+
+/* File Uploader styling */
+[data-testid="stFileUploader"] {
+    background: #F8FAFC !important;
+    border: 1.5px dashed #CBD5E1 !important;
+    border-radius: 12px !important;
+    padding: 16px !important;
+}
+
+[data-testid="stFileUploader"]:hover {
+    border-color: #2563EB !important;
+}
+
+/* Selectbox styling */
+[data-testid="stSelectbox"] label {
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    color: var(--text-secondary) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.03em !important;
+}
