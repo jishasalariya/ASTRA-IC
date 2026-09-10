@@ -36,8 +36,13 @@ def run_verification():
     print("=" * 70)
 
     # 1. Test CSV Ingestion
-    csv_path = "astra_ic_processed_lot.csv"
-    assert os.path.exists(csv_path), f"File {csv_path} does not exist!"
+    csv_candidates = [
+        "astra_ic_processed_lot.csv",
+        "test_lots/lot_flight_qualified_500.csv",
+        "test_lots/astra_ic_processed_lot.csv"
+    ]
+    csv_path = next((p for p in csv_candidates if os.path.exists(p)), None)
+    assert csv_path is not None, "No test lot CSV file found!"
     df = pd.read_csv(csv_path)
     print(f"[✓] Loaded {csv_path}: {df.shape[0]} rows, {df.shape[1]} columns")
 
@@ -73,8 +78,31 @@ def run_verification():
     assert ic6["early_abort"] == True, "IC_0006 should be flagged for early abort!"
     assert ic6["upper_3sigma"] >= CRITICAL_THRESHOLD, f"IC_0006 upper 3sigma should be >= {CRITICAL_THRESHOLD}"
 
-    # 4. Test XAI SHAP Attribution
-    print("\n--- Module C: SHAP Decomposition ---")
+    # 4. Test Multi-Parametric Features & Graceful Fallback
+    print("\n--- Multi-Parametric Telemetry & Fallback ---")
+    from core.engine import engineer_features
+    feats_full = engineer_features(processed_df)
+    assert "delta_tprop" in feats_full.columns, "delta_tprop should be in multi-parametric features"
+    assert "cross_leakage_delay_drift" in feats_full.columns, "cross_leakage_delay_drift should be present"
+    print(f"[✓] Multi-parametric features computed successfully (Total features: {feats_full.shape[1]})")
+
+    # Fallback test: DataFrame without tprop
+    df_no_tprop = processed_df.drop(columns=[col for col in ["tprop_0h", "tprop_24h", "tprop_96h", "tprop_168h"] if col in processed_df.columns])
+    feats_fallback = engineer_features(df_no_tprop)
+    assert feats_fallback.shape[1] == feats_full.shape[1], "Fallback features must maintain schema consistency"
+    assert (feats_fallback["delta_tprop"] == 0.0).all(), "Fallback delta_tprop should default to 0.0"
+    print("[✓] Graceful fallback without tprop verified (zero crash, consistent schema)")
+
+    # 5. Test Continuous Bayesian Active Learning Adaptation
+    print("\n--- Continuous Bayesian Active Learning Adaptation ---")
+    adapt_result = gpr_engine.active_adapt_lot(processed_df, uncertainty_percentile=85)
+    print(f"[✓] Active Learning Adapted {adapt_result['samples_adapted']} boundary chips")
+    print(f"    • Prior Mean Std: {adapt_result['mean_prior_std']:.3f} µA")
+    print(f"    • Post-Adaptation Mean Std: {adapt_result['mean_updated_std']:.3f} µA")
+    assert adapt_result["adapted"] == True, "Active adaptation should execute successfully"
+
+    # 6. Test XAI SHAP Attribution
+    print("\n--- Module C: Multi-Parametric SHAP Decomposition ---")
     xai = AstraXAIEngine(gpr_engine)
     xai.init_explainer(background_samples=25)
     explanation = xai.explain_component(ic6, processed_df, nsamples=50)
@@ -84,10 +112,11 @@ def run_verification():
     print(f"  • QA Log Headline: {explanation['qa_log']['headline']}")
     print(f"  • Summary: {explanation['qa_log']['summary_statement']}")
 
-    assert len(explanation["contributions"]) == 5, "Expected 5 feature contributions"
+    assert len(explanation["contributions"]) == 8, f"Expected 8 multi-parametric features, got {len(explanation['contributions'])}"
     assert "lot_relative_slope" in [c["feature"] for c in explanation["contributions"]], "lot_relative_slope must be in features"
+    assert "cross_leakage_delay_drift" in [c["feature"] for c in explanation["contributions"]], "cross_leakage_delay_drift must be in features"
 
-    # 5. Test PDF Report Generation
+    # 7. Test PDF Report Generation
     print("\n--- Compliance Report Generation ---")
     pdf_bytes = generate_compliance_pdf(processed_df, kpis, lot_id="TEST-LOT-001")
     assert len(pdf_bytes) > 1000, "PDF generation produced invalid/empty byte stream"

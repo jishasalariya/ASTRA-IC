@@ -127,10 +127,17 @@ if st.session_state["lot_df"] is None:
                 st.error(f"Error ingesting CSV file: {e}")
 
         if sample_btn:
-            sample_path = os.path.join(os.path.dirname(__file__), "astra_ic_processed_lot.csv")
-            if os.path.exists(sample_path):
-                raw_df = pd.read_csv(sample_path)
-            else:
+            sample_candidates = [
+                os.path.join(os.path.dirname(__file__), "astra_ic_processed_lot.csv"),
+                os.path.join(os.path.dirname(__file__), "test_lots", "lot_flight_qualified_500.csv"),
+                os.path.join(os.path.dirname(__file__), "test_lots", "astra_ic_processed_lot.csv")
+            ]
+            raw_df = None
+            for p in sample_candidates:
+                if os.path.exists(p):
+                    raw_df = pd.read_csv(p)
+                    break
+            if raw_df is None:
                 raw_df = generate_ate_lot(n_chips=500, random_seed=42)
             
             with st.spinner("Analyzing Flight Lot #500 Telemetry..."):
@@ -152,13 +159,19 @@ else:
     nav_col1, nav_col2 = st.columns([3, 1])
     
     with nav_col1:
+        adapt_info = ""
+        if gpr_engine.adaptation_history:
+            last_adapt = gpr_engine.adaptation_history[-1]
+            adapt_info = f" ({last_adapt['samples_adapted']} boundary ICs calibrated)"
+            
         st.markdown(f"""
-        <div style="display: flex; align-items: center; gap: 12px;">
-            <h2 style="margin: 0; font-size: 1.45rem; font-weight: 800; color: #0F172A;">
+        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <h2 style="margin: 0; font-size: 1.4rem; font-weight: 800; color: #0F172A;">
                 🛰️ ASTRA-IC Reliability Screening Dashboard
             </h2>
             <span class="standard-badge badge-blue">{lot_name}</span>
             <span class="standard-badge badge-green">MIL-STD-883 Compliant</span>
+            <span class="standard-badge badge-amber">🧠 Bayesian Lot Adaptation: Active{adapt_info}</span>
         </div>
         """, unsafe_allow_html=True)
 

@@ -4,7 +4,8 @@ Aerospace Semiconductor Telemetry & Reliability Analytics for Integrated Circuit
 
 Modules:
 - Module A: Dynamic Part Average Testing (PAT) using Modified Z-score (MAD) per AEC-Q001
-- Module B: Feature Engineering & Gaussian Process Regression (GPR) Drift Forecaster (24h -> 168h)
+- Module B: Multi-Parametric Feature Engineering (Leakage + Propagation Delay)
+- Module B: Gaussian Process Regression (GPR) Drift Forecaster & Continuous Active Learning Adaptation
 """
 
 import numpy as np
@@ -12,7 +13,7 @@ import pandas as pd
 from scipy import stats
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C, WhiteKernel
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Any, Optional, List
 
 # Standard Aerospace / Burn-In Constants
 STATIC_DATASHEET_LIMIT = 50.0   # µA - Static ATE screening absolute ceiling
@@ -24,25 +25,33 @@ SCREEN_HOURS = 24               # ASTRA-IC early screening timestamp
 
 def generate_ate_lot(n_chips: int = 500, random_seed: int = 42) -> pd.DataFrame:
     """
-    Simulates ATE test data for space-grade ICs at 0h, 24h, 96h, and 168h.
-    - 98% Nominal parts (stable, logarithmic Arrhenius drift)
-    - 1% Static Outliers (high initial leakage, but below 50µA absolute limit)
-    - 1% Latent Drift Defects (starts normal, fails catastrophically by 168h)
+    Simulates multi-parametric ATE test data for space-grade ICs at 0h, 24h, 96h, and 168h.
+    Synthesizes both Standby Current (Iddq) and Propagation Delay (tprop).
+    - 98% Nominal parts (stable logarithmic Arrhenius drift)
+    - 1% Static Outliers (high initial leakage, below 50µA absolute limit)
+    - 1% Latent Drift Defects (normal at 0h, fails catastrophically by 168h)
     """
     np.random.seed(random_seed)
     chip_ids = [f"IC_{i:04d}" for i in range(n_chips)]
 
-    # Baseline nominal parameters
+    # Baseline nominal parameters (Hour 0)
     iddq_0h = np.random.normal(loc=10.0, scale=1.5, size=n_chips)
     tprop_0h = np.random.normal(loc=12.0, scale=0.5, size=n_chips)
 
     alpha = np.random.uniform(0.3, 0.6, size=n_chips)
     beta = 0.05
     noise = lambda: np.random.normal(0, 0.15, size=n_chips)
+    noise_t = lambda: np.random.normal(0, 0.04, size=n_chips)
 
+    # Progression for iddq (µA)
     iddq_24h = iddq_0h + alpha * np.log(1 + beta * 24) + noise()
     iddq_96h = iddq_0h + alpha * np.log(1 + beta * 96) + noise()
     iddq_168h = iddq_0h + alpha * np.log(1 + beta * 168) + noise()
+
+    # Progression for propagation delay tprop (ns)
+    tprop_24h = tprop_0h + 0.10 * alpha * np.log(1 + beta * 24) + noise_t()
+    tprop_96h = tprop_0h + 0.12 * alpha * np.log(1 + beta * 96) + noise_t()
+    tprop_168h = tprop_0h + 0.15 * alpha * np.log(1 + beta * 168) + noise_t()
 
     labels = ["NOMINAL"] * n_chips
 
@@ -53,6 +62,10 @@ def generate_ate_lot(n_chips: int = 500, random_seed: int = 42) -> pd.DataFrame:
         iddq_24h[i] = iddq_0h[i] + 0.5 + np.random.normal(0, 0.1)
         iddq_96h[i] = iddq_0h[i] + 1.2 + np.random.normal(0, 0.1)
         iddq_168h[i] = iddq_0h[i] + 1.8 + np.random.normal(0, 0.1)
+
+        tprop_24h[i] = tprop_0h[i] + 0.15 + np.random.normal(0, 0.05)
+        tprop_96h[i] = tprop_0h[i] + 0.28 + np.random.normal(0, 0.05)
+        tprop_168h[i] = tprop_0h[i] + 0.40 + np.random.normal(0, 0.05)
         labels[i] = "STATIC_OUTLIER"
 
     # Inject Latent Drift Defects (starts nominal ~10µA, fails by 168h)
@@ -62,12 +75,20 @@ def generate_ate_lot(n_chips: int = 500, random_seed: int = 42) -> pd.DataFrame:
         iddq_24h[i] = iddq_0h[i] + 4.2
         iddq_96h[i] = iddq_0h[i] + 18.5
         iddq_168h[i] = iddq_0h[i] + 36.0
+
+        # Coupled electro-thermal delay degradation (hot carrier injection)
+        tprop_24h[i] = tprop_0h[i] + 0.85 + np.random.normal(0, 0.05)
+        tprop_96h[i] = tprop_0h[i] + 2.10 + np.random.normal(0, 0.05)
+        tprop_168h[i] = tprop_0h[i] + 4.50 + np.random.normal(0, 0.05)
         labels[i] = "LATENT_DRIFT_DEFECT"
 
     return pd.DataFrame({
         "chip_id": chip_ids,
         "true_label": labels,
         "tprop_0h": np.round(tprop_0h, 3),
+        "tprop_24h": np.round(tprop_24h, 3),
+        "tprop_96h": np.round(tprop_96h, 3),
+        "tprop_168h": np.round(tprop_168h, 3),
         "iddq_0h": np.round(iddq_0h, 3),
         "iddq_24h": np.round(iddq_24h, 3),
         "iddq_96h": np.round(iddq_96h, 3),
@@ -93,12 +114,17 @@ def run_dynamic_pat(df: pd.DataFrame, z_thresh: float = AEC_Q001_Z_THRESHOLD) ->
 
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Feature engineering for the 24h GPR drift forecasting model:
+    Multi-Parametric Feature Engineering for GPR Drift Forecasting:
     - iddq_0h: Initial standby leakage current (µA)
     - iddq_24h: Standby leakage current at 24h burn-in (µA)
-    - delta_24_0: Raw drift velocity (µA/24h)
+    - delta_24_0: Raw leakage drift velocity (µA/24h)
     - drift_ratio: Proportional leakage amplification
     - lot_relative_slope: Standardized drift acceleration relative to lot baseline
+    
+    Multi-parametric correlation terms (with graceful fallback if tprop is missing):
+    - delta_tprop: Propagation delay drift velocity (ns/24h)
+    - tprop_ratio: Relative timing delay amplification
+    - cross_leakage_delay_drift: Cross-coupled electro-thermal degradation (delta_iddq * delta_tprop)
     """
     X = pd.DataFrame(index=df.index)
     X["iddq_0h"] = df["iddq_0h"]
@@ -107,13 +133,25 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     X["drift_ratio"] = df["iddq_24h"] / (df["iddq_0h"] + 1e-6)
     lot_mean_slope = np.mean(X["delta_24_0"])
     X["lot_relative_slope"] = X["delta_24_0"] / (lot_mean_slope + 1e-6)
+
+    # Multi-parametric delay terms
+    if "tprop_0h" in df.columns and "tprop_24h" in df.columns:
+        X["delta_tprop"] = df["tprop_24h"] - df["tprop_0h"]
+        X["tprop_ratio"] = df["tprop_24h"] / (df["tprop_0h"] + 1e-6)
+        X["cross_leakage_delay_drift"] = X["delta_24_0"] * X["delta_tprop"]
+    else:
+        # Neutral imputation fallback: no delay drift observed
+        X["delta_tprop"] = 0.0
+        X["tprop_ratio"] = 1.0
+        X["cross_leakage_delay_drift"] = 0.0
+
     return X
 
 
 class AstraGPREngine:
     """
     Gaussian Process Regression (GPR) engine for 24h -> 168h trajectory forecasting.
-    Provides calibrated uncertainty bounds (sigma) and triggers early abort recommendations.
+    Includes Bayesian Uncertainty Sampling for Continuous Active Learning Adaptation.
     """
     def __init__(self, random_state: int = 42):
         self.random_state = random_state
@@ -125,16 +163,18 @@ class AstraGPREngine:
         )
         self.is_trained = False
         self.train_df: Optional[pd.DataFrame] = None
-        self.X_train: Optional[pd.DataFrame] = None
+        self.X_train_pool: Optional[pd.DataFrame] = None
+        self.y_train_pool: Optional[np.ndarray] = None
+        self.adaptation_history: List[Dict[str, Any]] = []
 
     def train_baseline_model(self, train_df: Optional[pd.DataFrame] = None) -> None:
         """Trains the GPR model on reference ATE training lot (default seed 101, 300 chips)."""
         if train_df is None:
             train_df = generate_ate_lot(n_chips=300, random_seed=101)
         self.train_df = train_df
-        self.X_train = engineer_features(train_df)
-        y_train = train_df["iddq_168h"].values
-        self.model.fit(self.X_train, y_train)
+        self.X_train_pool = engineer_features(train_df)
+        self.y_train_pool = train_df["iddq_168h"].values
+        self.model.fit(self.X_train_pool, self.y_train_pool)
         self.is_trained = True
 
     def predict_lot(
@@ -164,38 +204,101 @@ class AstraGPREngine:
 
         return res_df
 
+    def active_adapt_lot(
+        self,
+        new_lot_df: pd.DataFrame,
+        uncertainty_percentile: float = 90.0,
+        max_samples: int = 15
+    ) -> Dict[str, Any]:
+        """
+        Continuous Bayesian Active Learning:
+        1. Computes posterior predictive variance sigma(x) on new lot.
+        2. Identifies boundary candidates with highest epistemic uncertainty.
+        3. Updates memory pool and re-tunes kernel hyperparameters online.
+        """
+        if not self.is_trained:
+            self.train_baseline_model()
+
+        X_new = engineer_features(new_lot_df)
+        prior_mean, prior_std = self.model.predict(X_new, return_std=True)
+
+        # Identify boundary samples with highest uncertainty
+        unc_cutoff = np.percentile(prior_std, uncertainty_percentile)
+        high_unc_mask = prior_std >= unc_cutoff
+        candidate_indices = np.where(high_unc_mask)[0]
+
+        if len(candidate_indices) > max_samples:
+            # Pick the top max_samples most uncertain
+            sorted_by_unc = candidate_indices[np.argsort(prior_std[candidate_indices])[::-1]]
+            selected_indices = sorted_by_unc[:max_samples]
+        else:
+            selected_indices = candidate_indices
+
+        if len(selected_indices) == 0:
+            return {
+                "adapted": False,
+                "reason": "Uncertainty below adaptation threshold",
+                "samples_adapted": 0,
+                "mean_prior_std": float(np.mean(prior_std)),
+                "mean_updated_std": float(np.mean(prior_std))
+            }
+
+        X_adapt = X_new.iloc[selected_indices]
+        
+        # If true labels exist in new_lot_df, use ground truth; otherwise condition on posterior mean
+        if "iddq_168h" in new_lot_df.columns:
+            y_adapt = new_lot_df["iddq_168h"].iloc[selected_indices].values
+        else:
+            y_adapt = prior_mean[selected_indices]
+
+        # Augment training memory pool
+        self.X_train_pool = pd.concat([self.X_train_pool, X_adapt], ignore_index=True)
+        self.y_train_pool = np.concatenate([self.y_train_pool, y_adapt])
+
+        # Re-fit GPR online with warm start
+        self.model.fit(self.X_train_pool, self.y_train_pool)
+
+        # Re-evaluate uncertainty to measure variance reduction
+        _, updated_std = self.model.predict(X_new, return_std=True)
+
+        adapt_record = {
+            "adapted": True,
+            "samples_adapted": int(len(selected_indices)),
+            "mean_prior_std": round(float(np.mean(prior_std)), 3),
+            "mean_updated_std": round(float(np.mean(updated_std)), 3),
+            "variance_reduction_pct": round(float((np.mean(prior_std) - np.mean(updated_std)) / (np.mean(prior_std) + 1e-6) * 100), 1),
+            "adapted_chip_ids": list(new_lot_df["chip_id"].iloc[selected_indices].values)
+        }
+        self.adaptation_history.append(adapt_record)
+        return adapt_record
+
 
 def process_lot_data(
     df: pd.DataFrame,
     gpr_engine: Optional[AstraGPREngine] = None,
     z_thresh: float = AEC_Q001_Z_THRESHOLD,
     critical_threshold: float = CRITICAL_THRESHOLD,
-    force_recompute: bool = False
+    force_recompute: bool = False,
+    run_active_adaptation: bool = True
 ) -> Tuple[pd.DataFrame, AstraGPREngine]:
     """
     Unified processing function for ingested ATE lot CSVs:
     1. Validates or computes Module A Dynamic PAT (Hour 0)
-    2. Validates or computes Module B GPR 168h predictions & early aborts
+    2. Runs continuous Bayesian Active Learning adaptation
+    3. Runs Module B GPR 168h trajectory predictions & early abort triage
     """
     if gpr_engine is None:
         gpr_engine = AstraGPREngine()
         gpr_engine.train_baseline_model()
 
-    # Check if df already contains full pre-computed columns and recompute is not forced
-    has_pat = "mod_z_score" in df.columns and "pat_flagged" in df.columns
-    has_gpr = "pred_168h" in df.columns and "upper_3sigma" in df.columns and "early_abort" in df.columns
-
-    if has_pat and has_gpr and not force_recompute:
-        # Re-evaluate boolean flags if thresholds changed from defaults
-        processed_df = df.copy()
-        processed_df["pat_flagged"] = processed_df["mod_z_score"] > z_thresh
-        processed_df["early_abort"] = processed_df["upper_3sigma"] >= critical_threshold
-        return processed_df, gpr_engine
-
     # Step 1: Run Dynamic PAT
     processed_df = run_dynamic_pat(df, z_thresh=z_thresh)
 
-    # Step 2: Run GPR Prediction
+    # Step 2: Continuous Bayesian Active Learning
+    if run_active_adaptation:
+        gpr_engine.active_adapt_lot(processed_df)
+
+    # Step 3: Run GPR Prediction
     processed_df = gpr_engine.predict_lot(processed_df, critical_threshold=critical_threshold)
 
     return processed_df, gpr_engine
@@ -203,23 +306,20 @@ def process_lot_data(
 
 def calculate_lot_kpis(df: pd.DataFrame) -> Dict[str, Any]:
     """
-    Computes the 4 high-impact mission control summary KPIs:
+    Computes high-impact mission control summary KPIs:
     1. Total Screened ICs
-    2. Static ATE Pass Rate (100% passes 50µA datasheet ceiling)
+    2. Static ATE Pass Rate
     3. ASTRA-IC Early Aborts Flagged
     4. Chamber Testing Time Saved (144h saved per aborted component)
     """
     total_screened = len(df)
     
-    # Static ATE Pass Rate (checks if 0h or 24h exceeded 50µA datasheet ceiling)
     static_ate_failures = (df["iddq_0h"] > STATIC_DATASHEET_LIMIT).sum()
     static_pass_rate = 100.0 if total_screened == 0 else ((total_screened - static_ate_failures) / total_screened) * 100.0
 
-    # Early Aborts: chips flagged for 24h shutdown (Upper 3-sigma >= 30µA OR PAT flagged)
     early_aborts = df["early_abort"].sum() if "early_abort" in df.columns else 0
     pat_outliers = df["pat_flagged"].sum() if "pat_flagged" in df.columns else 0
     
-    # Latent defect capture
     if "true_label" in df.columns:
         latent_total = (df["true_label"] == "LATENT_DRIFT_DEFECT").sum()
         latent_caught = ((df["true_label"] == "LATENT_DRIFT_DEFECT") & df["early_abort"]).sum()
@@ -227,9 +327,6 @@ def calculate_lot_kpis(df: pd.DataFrame) -> Dict[str, Any]:
     else:
         escape_rate = 0.0
 
-    # Testing Chamber Time Saved:
-    # Baseline burn-in: 168 hours for all chips
-    # ASTRA-IC burn-in: 24 hours for early aborts, saving (168 - 24) = 144 hours each
     time_saved_percent = ((BURN_IN_TOTAL_HOURS - SCREEN_HOURS) / BURN_IN_TOTAL_HOURS) * 100.0
     hours_saved_per_aborted = (BURN_IN_TOTAL_HOURS - SCREEN_HOURS)
     total_hours_saved = early_aborts * hours_saved_per_aborted

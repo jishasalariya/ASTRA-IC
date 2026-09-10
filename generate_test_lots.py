@@ -1,6 +1,14 @@
 import numpy as np
 import pandas as pd
 import os
+import sys
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except AttributeError:
+        pass
 
 def create_lot(
     filename,
@@ -12,8 +20,8 @@ def create_lot(
     noise_level=0.15
 ):
     """
-    Synthesizes ATE Burn-In test telemetry for semiconductor lots.
-    Physics model: Arrhenius logarithmic degradation with noise.
+    Synthesizes multi-parametric ATE Burn-In test telemetry for semiconductor lots.
+    Physics model: Coupled Arrhenius logarithmic leakage drift + hot-carrier propagation delay progression.
     """
     np.random.seed(random_seed)
     chip_ids = [f"IC_{i:04d}" for i in range(n_chips)]
@@ -26,10 +34,15 @@ def create_lot(
     alpha = np.random.uniform(0.35, 0.55, size=n_chips)
     beta = 0.05
     noise = lambda: np.random.normal(0, noise_level, size=n_chips)
+    noise_t = lambda: np.random.normal(0, 0.04, size=n_chips)
 
     iddq_24h = iddq_0h + alpha * np.log(1 + beta * 24) + noise()
     iddq_96h = iddq_0h + alpha * np.log(1 + beta * 96) + noise()
     iddq_168h = iddq_0h + alpha * np.log(1 + beta * 168) + noise()
+
+    tprop_24h = tprop_0h + 0.08 * alpha * np.log(1 + beta * 24) + noise_t()
+    tprop_96h = tprop_0h + 0.12 * alpha * np.log(1 + beta * 96) + noise_t()
+    tprop_168h = tprop_0h + 0.15 * alpha * np.log(1 + beta * 168) + noise_t()
 
     labels = ["NOMINAL"] * n_chips
 
@@ -39,6 +52,10 @@ def create_lot(
         iddq_24h[i] = iddq_0h[i] + 0.45 + np.random.normal(0, 0.1)
         iddq_96h[i] = iddq_0h[i] + 1.10 + np.random.normal(0, 0.1)
         iddq_168h[i] = iddq_0h[i] + 1.75 + np.random.normal(0, 0.1)
+
+        tprop_24h[i] = tprop_0h[i] + 0.14 + np.random.normal(0, 0.03)
+        tprop_96h[i] = tprop_0h[i] + 0.26 + np.random.normal(0, 0.03)
+        tprop_168h[i] = tprop_0h[i] + 0.38 + np.random.normal(0, 0.03)
         labels[i] = "STATIC_OUTLIER"
 
     # 2. Inject Latent Drift Defects (Start normal ~10 µA, fail severely by 168h)
@@ -48,12 +65,20 @@ def create_lot(
         iddq_24h[i] = iddq_0h[i] + np.random.uniform(3.8, 4.6)
         iddq_96h[i] = iddq_0h[i] + np.random.uniform(16.0, 19.5)
         iddq_168h[i] = iddq_0h[i] + np.random.uniform(34.0, 38.0)
+
+        # Coupled delay degradation due to hot carrier injection & electromigration
+        tprop_24h[i] = tprop_0h[i] + np.random.uniform(0.70, 0.95)
+        tprop_96h[i] = tprop_0h[i] + np.random.uniform(1.80, 2.30)
+        tprop_168h[i] = tprop_0h[i] + np.random.uniform(3.80, 4.70)
         labels[i] = "LATENT_DRIFT_DEFECT"
 
     df = pd.DataFrame({
         "chip_id": chip_ids,
         "true_label": labels,
         "tprop_0h": np.round(tprop_0h, 3),
+        "tprop_24h": np.round(tprop_24h, 3),
+        "tprop_96h": np.round(tprop_96h, 3),
+        "tprop_168h": np.round(tprop_168h, 3),
         "iddq_0h": np.round(iddq_0h, 3),
         "iddq_24h": np.round(iddq_24h, 3),
         "iddq_96h": np.round(iddq_96h, 3),

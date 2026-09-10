@@ -1,20 +1,20 @@
 """
-ASTRA-IC Module C: Explainable AI (XAI) & QA Triage Engine
+ASTRA-IC Module C: Explainable AI (XAI) & Multi-Parametric QA Triage Engine
 Decomposes GPR predictions using SHAP (SHapley Additive exPlanations)
-and generates automated, human-readable QA Inspector Audit Logs.
+across both leakage current and propagation delay telemetry parameters.
 """
 
 import numpy as np
 import pandas as pd
 import shap
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, List
 from core.engine import engineer_features, AstraGPREngine, CRITICAL_THRESHOLD
 
 
 class AstraXAIEngine:
     """
     Explainability Engine utilizing SHAP KernelExplainer on the GPR model.
-    Provides feature impact attributions and aerospace compliance audit summaries.
+    Provides multi-parametric feature impact attributions and aerospace compliance audit summaries.
     """
     def __init__(self, gpr_engine: AstraGPREngine):
         self.gpr_engine = gpr_engine
@@ -25,7 +25,10 @@ class AstraXAIEngine:
             "iddq_24h",
             "delta_24_0",
             "drift_ratio",
-            "lot_relative_slope"
+            "lot_relative_slope",
+            "delta_tprop",
+            "tprop_ratio",
+            "cross_leakage_delay_drift"
         ]
 
     def init_explainer(self, background_samples: int = 25) -> None:
@@ -33,7 +36,9 @@ class AstraXAIEngine:
         if not self.gpr_engine.is_trained:
             self.gpr_engine.train_baseline_model()
 
-        X_background = shap.sample(self.gpr_engine.X_train, background_samples, random_state=42)
+        pool = self.gpr_engine.X_train_pool
+        X_background = shap.sample(pool[self.feature_names], background_samples, random_state=42)
+        
         # Kernel explainer on GPR predict mean
         self.explainer = shap.KernelExplainer(self.gpr_engine.model.predict, X_background)
 
@@ -84,7 +89,7 @@ class AstraXAIEngine:
             contributions.append({
                 "feature": feat,
                 "display_name": self._get_feature_label(feat),
-                "measured_value": round(feature_values_dict[feat], 3),
+                "measured_value": round(float(feature_values_dict[feat]), 3),
                 "shap_value": round(float(val), 2),
                 "is_adverse": float(val) > 0
             })
@@ -124,13 +129,16 @@ class AstraXAIEngine:
         return result
 
     def _get_feature_label(self, feature_name: str) -> str:
-        """User-friendly aerospace engineering labels for features."""
+        """User-friendly aerospace engineering labels for multi-parametric features."""
         mapping = {
-            "lot_relative_slope": "Drift Velocity vs Lot (lot_relative_slope)",
-            "delta_24_0": "24h Delta Leakage (delta_24_0)",
+            "lot_relative_slope": "Leakage Drift Velocity vs Lot (lot_relative_slope)",
+            "delta_24_0": "24h Delta Leakage Current (delta_24_0)",
             "iddq_24h": "24h Standby Current (iddq_24h)",
             "iddq_0h": "Initial Standby Current (iddq_0h)",
-            "drift_ratio": "Relative Drift Ratio (drift_ratio)"
+            "drift_ratio": "Relative Leakage Amplification (drift_ratio)",
+            "delta_tprop": "Propagation Delay Drift (delta_tprop)",
+            "tprop_ratio": "Delay Degradation Ratio (tprop_ratio)",
+            "cross_leakage_delay_drift": "Cross-Coupled Stress: Leakage × Delay (cross_drift)"
         }
         return mapping.get(feature_name, feature_name)
 
@@ -146,18 +154,29 @@ class AstraXAIEngine:
     ) -> Dict[str, Any]:
         """Synthesizes an engineering-grade aerospace audit statement."""
         top_driver = contributions[0]
-        top_driver_name = top_driver["display_name"]
         top_driver_val = top_driver["shap_value"]
         top_driver_sign = "+" if top_driver_val > 0 else ""
+
+        # Check for multi-parametric cross coupling
+        has_delay_drift = any(
+            c["feature"] in ["delta_tprop", "cross_leakage_delay_drift"] and c["shap_value"] > 0.5
+            for c in contributions
+        )
 
         if early_abort:
             headline = f"🚨 QA AUDIT: EARLY ABORT AT 24h FOR COMPONENT {chip_id}"
             decision_status = "CRITICAL REJECT - 24h EARLY ABORT RECOMMENDED"
-            badge_color = "#EF4444"
+            badge_color = "#DC2626"
+            
+            multi_text = ""
+            if has_delay_drift:
+                multi_text = " Compounding propagation delay shifts confirm coupled electro-thermal gate oxide breakdown."
+
             summary_statement = (
                 f"Component {chip_id} was flagged for Early Abort at 24h because its "
-                f"drift velocity ('{top_driver['feature']}') contributed {top_driver_sign}{top_driver_val:.2f} µA "
+                f"degradation velocity ('{top_driver['feature']}') contributed {top_driver_sign}{top_driver_val:.2f} µA "
                 f"toward the projected 168h failure threshold ({pred_168h:.2f} µA, Upper 3σ: {upper_3sigma:.2f} µA)."
+                f"{multi_text}"
             )
             recommendation = (
                 f"IMMEDIATE ACTION: Halt chamber testing for {chip_id} at 24h. "
@@ -167,9 +186,9 @@ class AstraXAIEngine:
         else:
             headline = f"✅ QA AUDIT: FLIGHT QUALIFICATION APPROVED FOR {chip_id}"
             decision_status = "PASS - QUALIFIED FOR FLIGHT SCREENING"
-            badge_color = "#10B981"
+            badge_color = "#16A34A"
             summary_statement = (
-                f"Component {chip_id} demonstrates nominal Arrhenius leakage degradation. "
+                f"Component {chip_id} demonstrates nominal Arrhenius leakage and delay progression. "
                 f"Predicted 168h standby current is {pred_168h:.2f} µA with Upper 3σ bound of {upper_3sigma:.2f} µA, "
                 f"well within the {CRITICAL_THRESHOLD:.1f} µA critical failure boundary."
             )
@@ -183,7 +202,7 @@ class AstraXAIEngine:
         for item in contributions:
             sign = "+" if item["shap_value"] > 0 else ""
             bullet_points.append(
-                f"• {item['display_name']}: {sign}{item['shap_value']:.2f} µA (Observed: {item['measured_value']})"
+                f"• {item['display_name']}: {sign}{item['shap_value']:.2f} µA (Measured: {item['measured_value']})"
             )
 
         return {
