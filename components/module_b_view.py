@@ -21,9 +21,36 @@ def render_module_b_chart(
     """
     fig = go.Figure()
 
-    # Find selected chip and nominal reference
-    chip_row = df[df["chip_id"] == selected_chip_id].iloc[0]
-    nominal_row = df[df.get("true_label", "") == "NOMINAL"].iloc[0] if "true_label" in df.columns else df.iloc[15]
+    if df.empty:
+        return fig
+
+    # Safely select chip_row
+    if "chip_id" in df.columns:
+        matching = df[df["chip_id"] == selected_chip_id]
+        if not matching.empty:
+            chip_row = matching.iloc[0]
+        else:
+            # Pick first early abort if present, else first row
+            aborts = df[df.get("early_abort", False)]
+            chip_row = aborts.iloc[0] if not aborts.empty else df.iloc[0]
+            selected_chip_id = str(chip_row["chip_id"])
+    else:
+        chip_row = df.iloc[0]
+        selected_chip_id = "IC_0000"
+
+    # Safely select nominal reference part for benchmark curve
+    nominal_row = None
+    if "true_label" in df.columns:
+        nominals = df[df["true_label"] == "NOMINAL"]
+        if not nominals.empty:
+            nominal_row = nominals.iloc[0]
+
+    if nominal_row is None:
+        non_aborts = df[~df.get("early_abort", False) & ~df.get("pat_flagged", False)]
+        if not non_aborts.empty:
+            nominal_row = non_aborts.iloc[0]
+        else:
+            nominal_row = df.iloc[0]
 
     # Time steps
     time_obs = np.array([0, 24])

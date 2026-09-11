@@ -69,7 +69,12 @@ class AstraXAIEngine:
 
         # Build feature row for this chip in the context of this lot
         X_lot = engineer_features(lot_df)
-        chip_idx = chip_row.name if chip_row.name in X_lot.index else lot_df[lot_df["chip_id"] == chip_id].index[0]
+        if chip_row.name in X_lot.index:
+            chip_idx = chip_row.name
+        elif "chip_id" in lot_df.columns and not lot_df[lot_df["chip_id"] == chip_id].empty:
+            chip_idx = lot_df[lot_df["chip_id"] == chip_id].index[0]
+        else:
+            chip_idx = X_lot.index[0]
         chip_features = X_lot.loc[[chip_idx]][self.feature_names]
 
         # Calculate SHAP values

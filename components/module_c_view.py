@@ -21,7 +21,16 @@ def render_component_inspector(
     Renders Section 3: Single Component Inspector & Plain-English Explanation.
     Includes status banner, human-readable rationale, and clean light-themed SHAP bar chart.
     """
-    chip_row = df[df["chip_id"] == chip_id].iloc[0]
+    if df.empty:
+        st.warning("No telemetry records available for component inspection.")
+        return
+
+    matching = df[df["chip_id"] == chip_id] if "chip_id" in df.columns else pd.DataFrame()
+    if not matching.empty:
+        chip_row = matching.iloc[0]
+    else:
+        chip_row = df.iloc[0]
+        chip_id = str(chip_row.get("chip_id", "IC_0000"))
     
     # Calculate or retrieve SHAP explanation
     xai_result = xai_engine.explain_component(chip_row=chip_row, lot_df=df)

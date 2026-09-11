@@ -123,8 +123,12 @@ if st.session_state["lot_df"] is None:
                     st.session_state["lot_df"] = proc_df
                     st.session_state["lot_name"] = uploaded_file.name
                     st.rerun()
+            except ValueError as ve:
+                st.error(f"⚠️ CSV Validation Notice: {ve}")
+                st.info("💡 **Expected CSV Telemetry Format:** Must contain at minimum 0-hour and 24-hour leakage readings (`iddq_0h` and `iddq_24h`, or case-insensitive aliases like `Current_0h`, `IDDQ_0H`). Optional columns: `chip_id`, `tprop_0h`, `tprop_24h`.")
             except Exception as e:
-                st.error(f"Error ingesting CSV file: {e}")
+                st.error(f"❌ Error ingesting CSV file: {e}")
+                st.info("💡 **Expected CSV Telemetry Format:** Must contain at minimum 0-hour and 24-hour leakage readings (`iddq_0h` and `iddq_24h`).")
 
         if sample_btn:
             sample_candidates = [
@@ -219,8 +223,17 @@ else:
             </div>
         </div>
         """, unsafe_allow_html=True)
-        # Trajectory chart for IC_0006 vs nominal
-        fig_b = render_module_b_chart(processed_df, selected_chip_id="IC_0006", height=380)
+        # Choose informative chip to showcase in Module B trajectory chart
+        all_chips = list(processed_df["chip_id"].values)
+        abort_chips = processed_df[processed_df.get("early_abort", False)]["chip_id"].tolist() if "early_abort" in processed_df.columns else []
+        if "IC_0006" in all_chips:
+            default_showcase_chip = "IC_0006"
+        elif len(abort_chips) > 0:
+            default_showcase_chip = abort_chips[0]
+        else:
+            default_showcase_chip = all_chips[0]
+
+        fig_b = render_module_b_chart(processed_df, selected_chip_id=default_showcase_chip, height=380)
         st.plotly_chart(fig_b, use_container_width=True)
 
     st.markdown("<br/>", unsafe_allow_html=True)
@@ -230,8 +243,12 @@ else:
     # -----------------------------------------------------------------
     st.markdown("### 🔎 Section 3: Single Component Inspector & Human-Readable Explanation")
 
-    all_chips = list(processed_df["chip_id"].values)
-    default_ic_idx = all_chips.index("IC_0006") if "IC_0006" in all_chips else 0
+    if "IC_0006" in all_chips:
+        default_ic_idx = all_chips.index("IC_0006")
+    elif len(abort_chips) > 0 and abort_chips[0] in all_chips:
+        default_ic_idx = all_chips.index(abort_chips[0])
+    else:
+        default_ic_idx = 0
 
     sel_col1, sel_col2 = st.columns([1.5, 2.5])
     with sel_col1:

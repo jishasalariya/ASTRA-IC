@@ -96,6 +96,79 @@ def generate_ate_lot(n_chips: int = 500, random_seed: int = 42) -> pd.DataFrame:
     })
 
 
+def normalize_ate_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalizes and validates an ingested ATE CSV DataFrame:
+    1. Trims whitespace from column headers
+    2. Case-insensitively maps common column aliases:
+       - chip_id: chip_id, chip, dut, dut_id, part_id, device_id, serial, id
+       - iddq_0h: iddq_0h, iddq0h, iddq_0, current_0h, i_0h, 0h
+       - iddq_24h: iddq_24h, iddq24h, iddq_24, current_24h, i_24h, 24h
+       - tprop_0h: tprop_0h, tprop0h, tprop_0, delay_0h, tp_0h
+       - tprop_24h: tprop_24h, tprop24h, tprop_24, delay_24h, tp_24h
+    3. Auto-generates chip_id if missing (e.g. IC_0000, IC_0001, ...)
+    4. Validates presence of essential measurements (iddq_0h and iddq_24h)
+    5. Coerces measurements to numeric floats
+    """
+    data = df.copy()
+    data.columns = [str(c).strip() for c in data.columns]
+
+    lower_cols = {c.lower(): c for c in data.columns}
+    col_mapping = {}
+
+    aliases = {
+        "chip_id": ["chip_id", "chipid", "chip", "dut", "dut_id", "part_id", "device_id", "serial", "serial_number", "id"],
+        "iddq_0h": ["iddq_0h", "iddq0h", "iddq_0", "iddq0", "current_0h", "current0h", "i_0h", "0h", "iddq_hour_0"],
+        "iddq_24h": ["iddq_24h", "iddq24h", "iddq_24", "iddq24", "current_24h", "current24h", "i_24h", "24h", "iddq_hour_24"],
+        "iddq_96h": ["iddq_96h", "iddq96h", "iddq_96", "iddq96", "current_96h", "96h"],
+        "iddq_168h": ["iddq_168h", "iddq168h", "iddq_168", "iddq168", "current_168h", "168h"],
+        "tprop_0h": ["tprop_0h", "tprop0h", "tprop_0", "tprop0", "delay_0h", "tp_0h"],
+        "tprop_24h": ["tprop_24h", "tprop24h", "tprop_24", "tprop24", "delay_24h", "tp_24h"],
+        "tprop_96h": ["tprop_96h", "tprop96h", "tprop_96", "tprop96", "delay_96h"],
+        "tprop_168h": ["tprop_168h", "tprop168h", "tprop_168", "tprop168", "delay_168h"],
+        "true_label": ["true_label", "label", "target", "ground_truth", "status", "class"]
+    }
+
+    for target, pattern_list in aliases.items():
+        if target not in data.columns:
+            for pat in pattern_list:
+                if pat in lower_cols:
+                    col_mapping[lower_cols[pat]] = target
+                    break
+
+    if col_mapping:
+        data.rename(columns=col_mapping, inplace=True)
+
+    # Validate essential minimum columns
+    missing_req = [c for c in ["iddq_0h", "iddq_24h"] if c not in data.columns]
+    if missing_req:
+        found_cols = ", ".join([f"'{c}'" for c in data.columns])
+        raise ValueError(
+            f"Missing required burn-in current telemetry column(s): {', '.join(missing_req)}. "
+            f"Found columns: [{found_cols}]. "
+            "Please ensure your CSV contains at least 0-hour and 24-hour leakage readings."
+        )
+
+    # Auto-generate chip_id if missing
+    if "chip_id" not in data.columns:
+        data["chip_id"] = [f"IC_{i:04d}" for i in range(len(data))]
+    else:
+        data["chip_id"] = data["chip_id"].astype(str)
+
+    # Coerce numerical telemetry columns
+    num_cols = ["iddq_0h", "iddq_24h", "iddq_96h", "iddq_168h", "tprop_0h", "tprop_24h", "tprop_96h", "tprop_168h"]
+    for nc in num_cols:
+        if nc in data.columns:
+            data[nc] = pd.to_numeric(data[nc], errors="coerce")
+
+    # Drop rows where essential measurements are NaN
+    data = data.dropna(subset=["iddq_0h", "iddq_24h"]).reset_index(drop=True)
+    if data.empty:
+        raise ValueError("Uploaded CSV contains no valid numerical rows for iddq_0h and iddq_24h.")
+
+    return data
+
+
 def run_dynamic_pat(df: pd.DataFrame, z_thresh: float = AEC_Q001_Z_THRESHOLD) -> pd.DataFrame:
     """
     Module A: AEC-Q001 Dynamic Part Average Testing (PAT) at Hour 0.
@@ -267,7 +340,7 @@ class AstraGPREngine:
             "mean_prior_std": round(float(np.mean(prior_std)), 3),
             "mean_updated_std": round(float(np.mean(updated_std)), 3),
             "variance_reduction_pct": round(float((np.mean(prior_std) - np.mean(updated_std)) / (np.mean(prior_std) + 1e-6) * 100), 1),
-            "adapted_chip_ids": list(new_lot_df["chip_id"].iloc[selected_indices].values)
+            "adapted_chip_ids": list(new_lot_df["chip_id"].iloc[selected_indices].values if "chip_id" in new_lot_df.columns else [f"IC_{idx:04d}" for idx in selected_indices])
         }
         self.adaptation_history.append(adapt_record)
         return adapt_record
@@ -283,6 +356,7 @@ def process_lot_data(
 ) -> Tuple[pd.DataFrame, AstraGPREngine]:
     """
     Unified processing function for ingested ATE lot CSVs:
+    0. Normalizes column headers, aliases, and generates chip_id if missing
     1. Validates or computes Module A Dynamic PAT (Hour 0)
     2. Runs continuous Bayesian Active Learning adaptation
     3. Runs Module B GPR 168h trajectory predictions & early abort triage
@@ -291,8 +365,11 @@ def process_lot_data(
         gpr_engine = AstraGPREngine()
         gpr_engine.train_baseline_model()
 
+    # Step 0: Normalize and sanitize input DataFrame
+    clean_df = normalize_ate_dataframe(df)
+
     # Step 1: Run Dynamic PAT
-    processed_df = run_dynamic_pat(df, z_thresh=z_thresh)
+    processed_df = run_dynamic_pat(clean_df, z_thresh=z_thresh)
 
     # Step 2: Continuous Bayesian Active Learning
     if run_active_adaptation:
