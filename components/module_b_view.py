@@ -131,32 +131,34 @@ def render_module_b_chart(
         line_dash="dash",
         line_color="#DC2626",
         line_width=2,
-        annotation_text=f"Critical Threshold ({CRITICAL_THRESHOLD:.0f} µA)",
+        annotation_text=f"<b>Critical Threshold ({CRITICAL_THRESHOLD:.0f} µA)</b>",
         annotation_position="top left",
-        annotation_font_color="#DC2626",
-        annotation_font_size=10
+        annotation_font_color="#B91C1C",
+        annotation_font_size=11
     )
 
     fig.update_layout(
         title=dict(
             text=f"<b>24h–168h Trajectory Forecaster ({selected_chip_id} vs Nominal)</b>",
-            font=dict(size=14, color="#0F172A", family="Inter")
+            font=dict(size=15, color="#0F172A", family="Inter")
         ),
         paper_bgcolor="#FFFFFF",
         plot_bgcolor="#FFFFFF",
-        font=dict(color="#475569", family="Inter"),
+        font=dict(color="#0F172A", family="Inter"),
         xaxis=dict(
-            title="<b>Burn-In Chamber Hours</b>",
+            title=dict(text="<b>Burn-In Chamber Hours</b>", font=dict(color="#0F172A", size=12)),
             gridcolor="#F1F5F9",
             zerolinecolor="#E2E8F0",
-            linecolor="#CBD5E1",
-            tickvals=[0, 24, 48, 72, 96, 120, 144, 168]
+            linecolor="#94A3B8",
+            tickvals=[0, 24, 48, 72, 96, 120, 144, 168],
+            tickfont=dict(color="#1E293B", size=11)
         ),
         yaxis=dict(
-            title="<b>Leakage Current Iddq (µA)</b>",
+            title=dict(text="<b>Leakage Current Iddq (µA)</b>", font=dict(color="#0F172A", size=12)),
             gridcolor="#F1F5F9",
             zerolinecolor="#E2E8F0",
-            linecolor="#CBD5E1",
+            linecolor="#94A3B8",
+            tickfont=dict(color="#1E293B", size=11),
             range=[0, max(52.0, c_upper_3s + 5.0)]
         ),
         legend=dict(
@@ -165,7 +167,7 @@ def render_module_b_chart(
             y=1.02,
             xanchor="right",
             x=1,
-            font=dict(size=9)
+            font=dict(size=10.5, color="#0F172A")
         ),
         height=height,
         margin=dict(l=40, r=30, t=50, b=40)

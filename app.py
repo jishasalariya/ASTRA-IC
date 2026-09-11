@@ -108,7 +108,7 @@ if st.session_state["lot_df"] is None:
         )
 
         st.markdown("""
-        <div style="text-align: center; margin: 16px 0 12px 0; color: #94A3B8; font-weight: 500; font-size: 0.88rem;">
+        <div style="text-align: center; margin: 18px 0 14px 0; color: #334155; font-weight: 700; font-size: 0.88rem; letter-spacing: 0.05em;">
             — OR FOR EVALUATION & DEMONSTRATION —
         </div>
         """, unsafe_allow_html=True)
@@ -205,8 +205,8 @@ else:
     with vis_col1:
         st.markdown("""
         <div class="clean-container" style="padding: 14px;">
-            <div style="font-size: 0.85rem; color: #475569; margin-bottom: 8px;">
-                <b>Module A (Hour 0):</b> Eliminates statistical maverick outliers using Median Absolute Deviation (MAD > 3.5), 
+            <div style="font-size: 0.90rem; color: #1E293B; font-weight: 500; margin-bottom: 8px; line-height: 1.5;">
+                <b style="color: #0F172A;">Module A (Hour 0):</b> Eliminates statistical maverick outliers using Median Absolute Deviation (MAD > 3.5), 
                 catching parts that sneak past the standard 50 µA static limit.
             </div>
         </div>
@@ -217,8 +217,8 @@ else:
     with vis_col2:
         st.markdown("""
         <div class="clean-container" style="padding: 14px;">
-            <div style="font-size: 0.85rem; color: #475569; margin-bottom: 8px;">
-                <b>Module B (Hour 24):</b> Calibrated GPR predicts Day-7 degradation. 
+            <div style="font-size: 0.90rem; color: #1E293B; font-weight: 500; margin-bottom: 8px; line-height: 1.5;">
+                <b style="color: #0F172A;">Module B (Hour 24):</b> Calibrated GPR predicts Day-7 degradation. 
                 Nominal chips stay safe at ~11 µA while latent duds curve past the 30 µA ceiling.
             </div>
         </div>
@@ -277,10 +277,10 @@ else:
     with exp_col1:
         st.markdown("""
         <div class="clean-container">
-            <div style="font-weight: 700; color: #0F172A; font-size: 1rem; margin-bottom: 4px;">
+            <div style="font-weight: 800; color: #0F172A; font-size: 1.05rem; margin-bottom: 6px;">
                 📜 Mission-Ready PDF Compliance Audit Report
             </div>
-            <div style="font-size: 0.85rem; color: #64748B; margin-bottom: 14px;">
+            <div style="font-size: 0.90rem; color: #1E293B; font-weight: 500; margin-bottom: 14px; line-height: 1.5;">
                 Conforming to MIL-STD-883 Method 1015 & AEC-Q001 standards, including QA digital signatures.
             </div>
         </div>
@@ -303,10 +303,10 @@ else:
     with exp_col2:
         st.markdown("""
         <div class="clean-container">
-            <div style="font-weight: 700; color: #0F172A; font-size: 1rem; margin-bottom: 4px;">
+            <div style="font-weight: 800; color: #0F172A; font-size: 1.05rem; margin-bottom: 6px;">
                 📊 Complete Screened Lot Telemetry Data (CSV)
             </div>
-            <div style="font-size: 0.85rem; color: #64748B; margin-bottom: 14px;">
+            <div style="font-size: 0.90rem; color: #1E293B; font-weight: 500; margin-bottom: 14px; line-height: 1.5;">
                 Includes baseline measurements, Dynamic PAT modified Z-scores, GPR predictions, and abort flags.
             </div>
         </div>

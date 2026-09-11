@@ -82,7 +82,7 @@ def render_component_inspector(
 
     feat_labels = [c["display_name"].split(" (")[0] for c in contributions][::-1]
     shap_vals = [c["shap_value"] for c in contributions][::-1]
-    bar_colors = ["#DC2626" if v > 0 else "#16A34A" for v in shap_vals]
+    bar_colors = ["#B91C1C" if v > 0 else "#15803D" for v in shap_vals]
 
     fig = go.Figure()
 
@@ -92,7 +92,7 @@ def render_component_inspector(
         orientation="h",
         marker=dict(
             color=bar_colors,
-            line=dict(color="#CBD5E1", width=0.5)
+            line=dict(color="#0F172A", width=0.5)
         ),
         text=[f"{v:+.2f} µA" for v in shap_vals],
         textposition="auto",
@@ -100,23 +100,25 @@ def render_component_inspector(
         hovertemplate="<b>%{y}</b><br>SHAP Force: <b>%{x:+.2f} µA</b><extra></extra>"
     ))
 
-    fig.add_vline(x=0, line_width=1.5, line_color="#94A3B8")
+    fig.add_vline(x=0, line_width=1.5, line_color="#475569")
 
     fig.update_layout(
         paper_bgcolor="#FFFFFF",
         plot_bgcolor="#FFFFFF",
-        font=dict(color="#475569", family="Inter"),
+        font=dict(color="#0F172A", family="Inter"),
         xaxis=dict(
-            title="<b>Impact on 168h Failure Projection (µA)</b>",
+            title=dict(text="<b>Impact on 168h Failure Projection (µA)</b>", font=dict(color="#0F172A", size=12)),
             gridcolor="#F1F5F9",
             zerolinecolor="#E2E8F0",
-            linecolor="#CBD5E1"
+            linecolor="#94A3B8",
+            tickfont=dict(color="#1E293B", size=11)
         ),
         yaxis=dict(
             gridcolor="#F1F5F9",
-            linecolor="#CBD5E1"
+            linecolor="#94A3B8",
+            tickfont=dict(color="#0F172A", size=11, family="Inter")
         ),
-        height=260,
+        height=270,
         margin=dict(l=20, r=20, t=10, b=35)
     )
 

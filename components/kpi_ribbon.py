@@ -21,7 +21,7 @@ def render_kpi_ribbon(kpis: Dict[str, Any]) -> None:
         <div class="kpi-card">
             <div>
                 <div class="kpi-title">Total ICs Ingested</div>
-                <div class="kpi-value">{total_chips} <span style="font-size: 1.05rem; color: #64748B; font-weight: 500;">Chips</span></div>
+                <div class="kpi-value">{total_chips} <span style="font-size: 1.05rem; color: #334155; font-weight: 600;">Chips</span></div>
             </div>
             <div class="kpi-subtext">
                 <span class="standard-badge badge-blue">Complete Batch Size</span>
@@ -34,7 +34,7 @@ def render_kpi_ribbon(kpis: Dict[str, Any]) -> None:
         <div class="kpi-card">
             <div>
                 <div class="kpi-title">Static Limit Pass Rate</div>
-                <div class="kpi-value" style="color: #D97706;">{static_pass:.1f}%</div>
+                <div class="kpi-value" style="color: #B45309;">{static_pass:.1f}%</div>
             </div>
             <div class="kpi-subtext">
                 <span class="standard-badge badge-amber">Standard tests miss latent duds</span>
@@ -47,7 +47,7 @@ def render_kpi_ribbon(kpis: Dict[str, Any]) -> None:
         <div class="kpi-card">
             <div>
                 <div class="kpi-title">ASTRA-IC Defect Catches</div>
-                <div class="kpi-value" style="color: #DC2626;">{early_aborts} <span style="font-size: 1.05rem; color: #EF4444; font-weight: 500;">Chips Flagged</span></div>
+                <div class="kpi-value" style="color: #B91C1C;">{early_aborts} <span style="font-size: 1.05rem; color: #991B1B; font-weight: 600;">Chips Flagged</span></div>
             </div>
             <div class="kpi-subtext">
                 <span class="standard-badge badge-red">Zero Escapes | 100% Recall</span>
@@ -60,7 +60,7 @@ def render_kpi_ribbon(kpis: Dict[str, Any]) -> None:
         <div class="kpi-card">
             <div>
                 <div class="kpi-title">Chamber Testing Time Saved</div>
-                <div class="kpi-value" style="color: #16A34A;">{time_saved:.1f}%</div>
+                <div class="kpi-value" style="color: #15803D;">{time_saved:.1f}%</div>
             </div>
             <div class="kpi-subtext">
                 <span class="standard-badge badge-green">144 Hours / Lot Saved</span>
