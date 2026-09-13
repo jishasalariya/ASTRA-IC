@@ -275,7 +275,3 @@ SIH-ASTRA-IC/
 
 ---
 
-## 👥 Contributors & License
-
-Developed for the **Smart India Hackathon (SIH)** under the Aerospace & Defense Semiconductor Domain.  
-Licensed under the **MIT License**.
